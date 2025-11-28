@@ -1,0 +1,76 @@
+project_name: cliptui
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - id: cliptui
+    main: ./cmd/cliptui
+    binary: cliptui
+    env:
+      - CGO_ENABLED=1
+    goos:
+      - linux
+    goarch:
+      - amd64
+      - arm64
+    ldflags:
+      - -s -w
+      - -X main.version={{.Version}}
+      - -X main.commit={{.Commit}}
+      - -X main.date={{.Date}}
+
+archives:
+  - id: default
+    format: tar.gz
+    name_template: >-
+      {{ .ProjectName }}_
+      {{- .Version }}_
+      {{- .Os }}_
+      {{- .Arch }}
+
+nfpms:
+  - id: cliptui
+    package_name: cliptui
+    homepage: https://github.com/dvd/cliptui
+    maintainer: Your Name <your.email@example.com>
+    description: |
+      A beautiful terminal-based clipboard history manager.
+      clipTUI watches your system clipboard in the background, stores every item
+      locally, and lets you browse, search, preview, and restore previous clipboard entries.
+    license: MIT
+    formats:
+      - deb
+      - rpm
+      - archlinux
+    dependencies:
+      - xsel
+    recommends:
+      - wl-clipboard
+    contents:
+      - src: ./systemd/cliptui.service
+        dst: /usr/lib/systemd/user/cliptui.service
+    scripts:
+      postinstall: ./scripts/postinstall.sh
+
+checksum:
+  name_template: 'checksums.txt'
+
+snapshot:
+  name_template: "{{ incpatch .Version }}-next"
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - '^docs:'
+      - '^test:'
+      - '^chore:'
+
+release:
+  github:
+    owner: dvd
+    name: cliptui
+  draft: false
+  prerelease: auto
