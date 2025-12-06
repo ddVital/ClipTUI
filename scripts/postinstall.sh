@@ -1,0 +1,15 @@
+#!/bin/bash
+
+echo "clipTUI installed successfully!"
+echo ""
+echo "To start the clipboard monitor daemon:"
+echo "  systemctl --user enable --now cliptui.service"
+echo ""
+echo "Or run manually:"
+echo "  cliptui daemon"
+echo ""
+echo "To browse clipboard history:"
+echo "  cliptui"
+echo ""
+echo "For help:"
+echo "  cliptui --help"
