@@ -70,7 +70,7 @@ changelog:
 
 release:
   github:
-    owner: dvd
+    owner: ddvital
     name: cliptui
   draft: false
   prerelease: auto
