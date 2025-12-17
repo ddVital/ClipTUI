@@ -3,7 +3,7 @@ pkgname=cliptui-bin
 pkgver=0.1.1
 pkgrel=1
 pkgdesc="A beautiful terminal-based clipboard history manager (binary release)"
-arch=('x86_64' 'aarch64')
+arch=('x86_64')
 url="https://github.com/ddvital/cliptui"
 license=('MIT')
 provides=('cliptui')
@@ -11,9 +11,7 @@ conflicts=('cliptui')
 depends=('xsel')
 optdepends=('wl-clipboard: Wayland clipboard support')
 source_x86_64=("$url/releases/download/v$pkgver/${pkgname%-bin}_${pkgver}_linux_amd64.tar.gz")
-source_aarch64=("$url/releases/download/v$pkgver/${pkgname%-bin}_${pkgver}_linux_arm64.tar.gz")
 sha256sums_x86_64=('SKIP')  # Update after release
-sha256sums_aarch64=('SKIP')  # Update after release
 
 package() {
   install -Dm755 cliptui "$pkgdir/usr/bin/cliptui"
