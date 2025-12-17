@@ -1,10 +1,10 @@
 # Maintainer: Your Name <your.email@example.com>
 pkgname=cliptui
-pkgver=0.1.0
+pkgver=0.1.1
 pkgrel=1
 pkgdesc="A beautiful terminal-based clipboard history manager"
 arch=('x86_64' 'aarch64')
-url="https://github.com/dvd/cliptui"
+url="https://github.com/ddvital/cliptui"
 license=('MIT')
 depends=('xsel')
 optdepends=('wl-clipboard: Wayland clipboard support')
