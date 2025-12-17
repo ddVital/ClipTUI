@@ -1,6 +1,6 @@
-# Maintainer: Your Name <your.email@example.com>
+# Maintainer: ddvital <ddvital@gmail.com>
 pkgname=cliptui
-pkgver=0.1.1
+pkgver=0.1.3
 pkgrel=1
 pkgdesc="A beautiful terminal-based clipboard history manager"
 arch=('x86_64')
@@ -10,10 +10,10 @@ depends=('xsel')
 optdepends=('wl-clipboard: Wayland clipboard support')
 makedepends=('go' 'git')
 source=("$pkgname-$pkgver.tar.gz::$url/archive/v$pkgver.tar.gz")
-sha256sums=('SKIP')  # Update this after first release
+sha256sums=('7bce56534e620811c93597d03e54d2c2e5159b4049e3dccc10feb0f6641916b1')
 
 build() {
-  cd "$pkgname-$pkgver"
+  cd "ClipTUI-$pkgver"
   export CGO_ENABLED=1
   export GOFLAGS="-buildmode=pie -trimpath -mod=readonly -modcacherw"
   go build -ldflags="-linkmode external -extldflags \"${LDFLAGS}\" -s -w -X main.version=$pkgver" \
@@ -21,12 +21,12 @@ build() {
 }
 
 check() {
-  cd "$pkgname-$pkgver"
+  cd "ClipTUI-$pkgver"
   go test ./...
 }
 
 package() {
-  cd "$pkgname-$pkgver"
+  cd "ClipTUI-$pkgver"
   install -Dm755 "$pkgname" "$pkgdir/usr/bin/$pkgname"
   install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
   install -Dm644 README.md "$pkgdir/usr/share/doc/$pkgname/README.md"
