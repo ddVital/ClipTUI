@@ -286,34 +286,78 @@ func (a *App) updateListDisplay() {
 		return
 	}
 
-	a.listWidget.SetCell(0, 0, tview.NewTableCell("Content").
+	// Left spacer
+	a.listWidget.SetCell(0, 0, tview.NewTableCell("").
+		SetExpansion(2).
+		SetSelectable(false))
+	// Number column
+	a.listWidget.SetCell(0, 1, tview.NewTableCell(" # ").
+		SetTextColor(tcell.ColorYellow).
+		SetAlign(tview.AlignCenter).
+		SetSelectable(false).
+		SetExpansion(0).
+		SetAttributes(tcell.AttrBold))
+	// Content column
+	a.listWidget.SetCell(0, 2, tview.NewTableCell("Content").
 		SetTextColor(tcell.ColorYellow).
 		SetAlign(tview.AlignLeft).
 		SetSelectable(false).
+		SetExpansion(3).
 		SetAttributes(tcell.AttrBold))
-	a.listWidget.SetCell(0, 1, tview.NewTableCell("Date").
+	// Date column
+	a.listWidget.SetCell(0, 3, tview.NewTableCell(fmt.Sprintf("%12s", "Date")).
 		SetTextColor(tcell.ColorYellow).
 		SetAlign(tview.AlignRight).
 		SetSelectable(false).
+		SetExpansion(0).
 		SetAttributes(tcell.AttrBold))
+	// Right spacer
+	a.listWidget.SetCell(0, 4, tview.NewTableCell("").
+		SetExpansion(2).
+		SetSelectable(false))
 
 	for i, item := range a.state.filteredItems {
 		row := i + 1 // +1 because row 0 is the header
 		preview := truncate(item.Preview, 80)
 		timestamp := formatTimestamp(item.Timestamp)
 
-		a.listWidget.SetCell(row, 0, tview.NewTableCell(preview).
+		// Left spacer
+		a.listWidget.SetCell(row, 0, tview.NewTableCell("").
+			SetExpansion(2))
+
+		// Number column (show numbers 0-9 for first 10 items)
+		var numStr string
+		if i < 10 {
+			numStr = fmt.Sprintf(" %d ", i)
+		} else {
+			numStr = "   "
+		}
+		a.listWidget.SetCell(row, 1, tview.NewTableCell(numStr).
+			SetAlign(tview.AlignCenter).
+			SetTextColor(tcell.ColorYellow).
+			SetExpansion(0).
+			SetAttributes(tcell.AttrBold))
+
+		// Content column
+		a.listWidget.SetCell(row, 2, tview.NewTableCell(preview).
 			SetAlign(tview.AlignLeft).
+			SetExpansion(3).
 			SetTextColor(tcell.ColorDefault))
 
-		a.listWidget.SetCell(row, 1, tview.NewTableCell(timestamp).
+		// Date column
+		a.listWidget.SetCell(row, 3, tview.NewTableCell(fmt.Sprintf("%12s", timestamp)).
 			SetAlign(tview.AlignRight).
+			SetExpansion(0).
 			SetTextColor(tcell.ColorDefault).
 			SetAttributes(tcell.AttrDim))
+
+		// Right spacer
+		a.listWidget.SetCell(row, 4, tview.NewTableCell("").
+			SetExpansion(2))
 	}
 
 	if len(a.state.filteredItems) > 0 && a.state.currentMode != modeSearch {
-		a.listWidget.Select(a.state.cursor+1, 0) // +1 for header row
+		a.listWidget.Select(a.state.cursor+1, 1) // +1 for header row, column 1 is number column
 	}
 }
 
