@@ -7,6 +7,30 @@ import (
 	"github.com/rivo/tview"
 )
 
+// moveCursorUp moves the cursor up by one item
+func (a *App) moveCursorUp() {
+	row, _ := a.listWidget.GetSelection()
+	if row > 1 {
+		a.listWidget.Select(row-1, 1)
+		a.state.mu.Lock()
+		a.state.cursor = row - 2
+		a.state.mu.Unlock()
+		a.updateListDisplay()
+	}
+}
+
+// moveCursorDown moves the cursor down by one item
+func (a *App) moveCursorDown() {
+	row, _ := a.listWidget.GetSelection()
+	if row < a.listWidget.GetRowCount()-1 {
+		a.listWidget.Select(row+1, 1)
+		a.state.mu.Lock()
+		a.state.cursor = row
+		a.state.mu.Unlock()
+		a.updateListDisplay()
+	}
+}
+
 // buildListPage creates the list mode layout
 func (a *App) buildListPage() tview.Primitive {
 	// Table widget - use terminal default colors
@@ -22,21 +46,11 @@ func (a *App) buildListPage() tview.Primitive {
 
 	a.listWidget.SetMouseCapture(func(action tview.MouseAction, event *tcell.EventMouse) (tview.MouseAction, *tcell.EventMouse) {
 		if action == tview.MouseScrollUp {
-			row, _ := a.listWidget.GetSelection()
-			if row > 1 {
-				a.listWidget.Select(row-1, 1)
-				a.state.cursor = row - 2 // New row is row-1, cursor is (row-1)-1 = row-2
-				a.updateListDisplay()
-			}
+			a.moveCursorUp()
 			return action, nil
 		}
 		if action == tview.MouseScrollDown {
-			row, _ := a.listWidget.GetSelection()
-			if row < a.listWidget.GetRowCount()-1 {
-				a.listWidget.Select(row+1, 1)
-				a.state.cursor = row // New row is row+1, cursor is (row+1)-1 = row
-				a.updateListDisplay()
-			}
+			a.moveCursorDown()
 			return action, nil
 		}
 		return action, event
@@ -45,20 +59,10 @@ func (a *App) buildListPage() tview.Primitive {
 	a.listWidget.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
 		switch event.Rune() {
 		case 'j':
-			row, _ := a.listWidget.GetSelection()
-			if row < a.listWidget.GetRowCount()-1 {
-				a.listWidget.Select(row+1, 1)
-				a.state.cursor = row // New row is row+1, cursor is (row+1)-1 = row
-				a.updateListDisplay()
-			}
+			a.moveCursorDown()
 			return nil
 		case 'k':
-			row, _ := a.listWidget.GetSelection()
-			if row > 1 { // Can't go above row 1 (row 0 is header)
-				a.listWidget.Select(row-1, 1)
-				a.state.cursor = row - 2 // New row is row-1, cursor is (row-1)-1 = row-2
-				a.updateListDisplay()
-			}
+			a.moveCursorUp()
 			return nil
 		case 'p':
 			a.switchToPreviewMode()
@@ -78,10 +82,14 @@ func (a *App) buildListPage() tview.Primitive {
 		case '0', '1', '2', '3', '4', '5', '6', '7', '8', '9':
 			// Quick copy by number (0 = first item, 9 = tenth item)
 			num := int(event.Rune() - '0')
+			a.state.mu.RLock()
 			if num < len(a.state.filteredItems) {
 				item := a.state.filteredItems[num]
+				a.state.mu.RUnlock()
 				clipboard.SetClipboard(item.Content)
 				a.app.Stop()
+			} else {
+				a.state.mu.RUnlock()
 			}
 			return nil
 		}
@@ -92,21 +100,11 @@ func (a *App) buildListPage() tview.Primitive {
 		}
 
 		if event.Key() == tcell.KeyDown {
-			row, _ := a.listWidget.GetSelection()
-			if row < a.listWidget.GetRowCount()-1 {
-				a.listWidget.Select(row+1, 1)
-				a.state.cursor = row // New row is row+1, cursor is (row+1)-1 = row
-				a.updateListDisplay()
-			}
+			a.moveCursorDown()
 			return nil
 		}
 		if event.Key() == tcell.KeyUp {
-			row, _ := a.listWidget.GetSelection()
-			if row > 1 {
-				a.listWidget.Select(row-1, 1)
-				a.state.cursor = row - 2 // New row is row-1, cursor is (row-1)-1 = row-2
-				a.updateListDisplay()
-			}
+			a.moveCursorUp()
 			return nil
 		}
 
@@ -150,6 +148,7 @@ func (a *App) buildListPage() tview.Primitive {
 		SetBorderPadding(0, 0, 1, 1)
 
 	a.searchInput.SetChangedFunc(func(text string) {
+		a.state.mu.Lock()
 		a.state.searchQuery = text
 		if text == "" {
 			a.state.filteredItems = a.state.items
@@ -157,14 +156,17 @@ func (a *App) buildListPage() tview.Primitive {
 			a.state.filteredItems = search.Filter(a.state.items, text)
 		}
 		a.state.cursor = 0
+		a.state.mu.Unlock()
 		a.updateListDisplay()
 	})
 
 	a.searchInput.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
 		if event.Key() == tcell.KeyEscape {
+			a.state.mu.Lock()
 			a.state.filteredItems = a.state.items
 			a.state.searchQuery = ""
 			a.state.cursor = 0
+			a.state.mu.Unlock()
 			a.exitSearchMode()
 			a.updateListDisplay()
 			return nil
@@ -179,7 +181,7 @@ func (a *App) buildListPage() tview.Primitive {
 	a.mainFlex = tview.NewFlex().
 		SetDirection(tview.FlexRow).
 		AddItem(a.listContainer, 0, 1, true).
-		AddItem(a.listHelp, 3, 0, false)
+		AddItem(a.listHelp, searchInputHeight, 0, false)
 
 	outer := tview.NewFlex().
 		SetDirection(tview.FlexRow).
@@ -236,7 +238,7 @@ func (a *App) buildPreviewPage() tview.Primitive {
 	flex := tview.NewFlex().
 		SetDirection(tview.FlexRow).
 		AddItem(a.previewView, 0, 1, true).
-		AddItem(a.previewHelp, 3, 0, false)
+		AddItem(a.previewHelp, searchInputHeight, 0, false)
 
 	outer := tview.NewFlex().
 		SetDirection(tview.FlexRow).
