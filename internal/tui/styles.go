@@ -1,94 +1,62 @@
 package tui
 
 import (
-	"github.com/charmbracelet/lipgloss"
+	"fmt"
+	"strings"
+	"time"
 )
 
-var (
-	// Colors
-	primaryColor   = lipgloss.Color("#7C3AED") // Purple
-	secondaryColor = lipgloss.Color("#A78BFA")
-	accentColor    = lipgloss.Color("#EC4899") // Pink
-	textColor      = lipgloss.Color("#E5E7EB")
-	mutedColor     = lipgloss.Color("#9CA3AF")
-	bgColor        = lipgloss.Color("#1F2937")
-	selectedBg     = lipgloss.Color("#374151")
+// Mode types
+type mode int
 
-	// Type colors
-	typeColors = map[string]lipgloss.Color{
-		"text":     lipgloss.Color("#60A5FA"), // Blue
-		"code":     lipgloss.Color("#34D399"), // Green
-		"markdown": lipgloss.Color("#FBBF24"), // Yellow
-		"url":      lipgloss.Color("#F472B6"), // Pink
-	}
-
-	// Base styles
-	baseStyle = lipgloss.NewStyle().
-			Foreground(textColor)
-
-	// Title style
-	titleStyle = lipgloss.NewStyle().
-			Foreground(primaryColor).
-			Bold(true).
-			Padding(0, 1)
-
-	// Item styles
-	itemStyle = lipgloss.NewStyle().
-			Padding(0, 2).
-			Foreground(textColor)
-
-	selectedItemStyle = lipgloss.NewStyle().
-				Padding(0, 2).
-				Foreground(textColor).
-				Background(selectedBg).
-				Bold(true)
-
-	// Type badge style
-	typeBadgeStyle = lipgloss.NewStyle().
-			Padding(0, 1).
-			Bold(true)
-
-	// Preview style
-	previewStyle = lipgloss.NewStyle().
-			Foreground(mutedColor).
-			Italic(true).
-			Padding(0, 2)
-
-	// Timestamp style
-	timestampStyle = lipgloss.NewStyle().
-			Foreground(mutedColor).
-			Align(lipgloss.Right)
-
-	// Search input style
-	searchStyle = lipgloss.NewStyle().
-			Foreground(accentColor).
-			Bold(true).
-			Padding(0, 1)
-
-	// Help style
-	helpStyle = lipgloss.NewStyle().
-			Foreground(mutedColor).
-			Padding(1, 2)
-
-	// Border style
-	borderStyle = lipgloss.NewStyle().
-			Border(lipgloss.RoundedBorder()).
-			BorderForeground(secondaryColor).
-			Padding(1, 2)
-
-	// Status bar style
-	statusStyle = lipgloss.NewStyle().
-			Foreground(mutedColor).
-			Background(bgColor).
-			Padding(0, 1)
+const (
+	modeList mode = iota
+	modePreview
+	modeSearch
 )
 
-func getTypeBadge(itemType string) string {
-	color, ok := typeColors[itemType]
-	if !ok {
-		color = mutedColor
-	}
+// formatTimestamp converts a timestamp to relative time string
+func formatTimestamp(t time.Time) string {
+	now := time.Now()
+	diff := now.Sub(t)
 
-	style := typeBadgeStyle.Copy().Foreground(color)
-	return style.Render(itemType)
+	if diff < time.Minute {
+		return "just now"
+	} else if diff < time.Hour {
+		mins := int(diff.Minutes())
+		return fmt.Sprintf("%dm ago", mins)
+	} else if diff < 24*time.Hour {
+		hours := int(diff.Hours())
+		return fmt.Sprintf("%dh ago", hours)
+	} else {
+		days := int(diff.Hours() / 24)
+		if days == 1 {
+			return "yesterday"
+		}
+		return fmt.Sprintf("%dd ago", days)
+	}
+}
+
+// truncate shortens a string and replaces newlines
+func truncate(s string, maxLen int) string {
+	s = strings.ReplaceAll(s, "\n", " ")
+	s = strings.ReplaceAll(s, "\t", " ")
+
+	if len(s) <= maxLen {
+		return s
+	}
+	return s[:maxLen-3] + "..."
+}
+
+// styleTimestamp returns a styled timestamp string
+func styleTimestamp(t time.Time) string {
+	return formatTimestamp(t)
+}
+
+// min returns the minimum of two integers
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
 }
