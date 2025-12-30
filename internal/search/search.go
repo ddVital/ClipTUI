@@ -16,7 +16,9 @@ func Filter(items []types.ClipboardItem, query string) []types.ClipboardItem {
 	}
 
 	query = strings.ToLower(query)
-	results := make([]types.ClipboardItem, 0)
+	// Pre-allocate slice with capacity to avoid reallocations
+	// In worst case, all items match, so use len(items) as capacity
+	results := make([]types.ClipboardItem, 0, len(items))
 
 	for _, item := range items {
 		if strings.Contains(strings.ToLower(item.Content), query) {
