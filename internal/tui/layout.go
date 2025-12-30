@@ -1,0 +1,246 @@
+package tui
+
+import (
+	"github.com/dvd/cliptui/internal/search"
+	"github.com/gdamore/tcell/v2"
+	"github.com/rivo/tview"
+)
+
+// buildListPage creates the list mode layout
+func (a *App) buildListPage() tview.Primitive {
+	// Table widget - use terminal default colors
+	a.listWidget = tview.NewTable().
+		SetFixed(1, 0). // Fix the header row
+		SetSelectable(true, false).
+		SetSelectedStyle(tcell.StyleDefault.
+			Background(tcell.ColorDefault).
+			Foreground(tcell.ColorDefault).
+			Reverse(true)). // Use reverse video for selection
+		SetSeparator(' ')
+	a.listWidget.SetBorder(false)
+
+	a.listWidget.SetMouseCapture(func(action tview.MouseAction, event *tcell.EventMouse) (tview.MouseAction, *tcell.EventMouse) {
+		if action == tview.MouseScrollUp {
+			row, _ := a.listWidget.GetSelection()
+			if row > 1 {
+				a.listWidget.Select(row-1, 0)
+				a.state.cursor = row - 2 // New row is row-1, cursor is (row-1)-1 = row-2
+				a.updateListDisplay()
+			}
+			return action, nil
+		}
+		if action == tview.MouseScrollDown {
+			row, _ := a.listWidget.GetSelection()
+			if row < a.listWidget.GetRowCount()-1 {
+				a.listWidget.Select(row+1, 0)
+				a.state.cursor = row // New row is row+1, cursor is (row+1)-1 = row
+				a.updateListDisplay()
+			}
+			return action, nil
+		}
+		return action, event
+	})
+
+	a.listWidget.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+		switch event.Rune() {
+		case 'j':
+			row, _ := a.listWidget.GetSelection()
+			if row < a.listWidget.GetRowCount()-1 {
+				a.listWidget.Select(row+1, 0)
+				a.state.cursor = row // New row is row+1, cursor is (row+1)-1 = row
+				a.updateListDisplay()
+			}
+			return nil
+		case 'k':
+			row, _ := a.listWidget.GetSelection()
+			if row > 1 { // Can't go above row 1 (row 0 is header)
+				a.listWidget.Select(row-1, 0)
+				a.state.cursor = row - 2 // New row is row-1, cursor is (row-1)-1 = row-2
+				a.updateListDisplay()
+			}
+			return nil
+		case 'p':
+			a.switchToPreviewMode()
+			return nil
+		case '/':
+			a.switchToSearchMode()
+			return nil
+		case 'd':
+			a.handleDeleteAction()
+			return nil
+		case 'D':
+			a.handleClearAllAction()
+			return nil
+		case 'y':
+			a.handleCopyAction()
+			return nil
+		}
+
+		if event.Key() == tcell.KeyEnter {
+			a.handleCopyAction()
+			return nil
+		}
+
+		if event.Key() == tcell.KeyDown {
+			row, _ := a.listWidget.GetSelection()
+			if row < a.listWidget.GetRowCount()-1 {
+				a.listWidget.Select(row+1, 0)
+				a.state.cursor = row // New row is row+1, cursor is (row+1)-1 = row
+				a.updateListDisplay()
+			}
+			return nil
+		}
+		if event.Key() == tcell.KeyUp {
+			row, _ := a.listWidget.GetSelection()
+			if row > 1 {
+				a.listWidget.Select(row-1, 0)
+				a.state.cursor = row - 2 // New row is row-1, cursor is (row-1)-1 = row-2
+				a.updateListDisplay()
+			}
+			return nil
+		}
+
+		return event
+	})
+
+	a.listHelp = tview.NewTextView().
+		SetDynamicColors(true).
+		SetTextAlign(tview.AlignLeft)
+	a.listHelp.SetText("  ↑/k up • ↓/j down • enter/y copy • p preview • / search • d delete • D clear • q quit")
+	a.listHelp.SetBorder(true).
+		SetTitle(" Shortcuts ").
+		SetTitleAlign(tview.AlignLeft).
+		SetBorderColor(tcell.ColorBlue).
+		SetTitleColor(tcell.ColorBlue)
+
+	centeredTable := tview.NewFlex().
+		AddItem(nil, 0, 1, false).
+		AddItem(a.listWidget, 100, 0, true).
+		AddItem(nil, 0, 1, false)
+
+	a.listContainer = tview.NewFlex().
+		SetDirection(tview.FlexRow).
+		AddItem(centeredTable, 0, 1, true)
+	a.listContainer.SetBorder(true).
+		SetBorderColor(tcell.ColorGreen).
+		SetTitleColor(tcell.ColorGreen).
+		SetBorderPadding(1, 0, 1, 1).
+		SetTitle(" Clipboard History ").
+		SetTitleAlign(tview.AlignLeft)
+
+	a.listHelp.SetBorderPadding(0, 0, 1, 1)
+
+	a.searchInput = tview.NewInputField().
+		SetLabel("").
+		SetPlaceholder("Type to search...").
+		SetFieldBackgroundColor(tcell.ColorDefault).
+		SetFieldTextColor(tcell.ColorWhite).
+		SetPlaceholderTextColor(tcell.ColorGray)
+
+	a.searchInput.SetBorder(true).
+		SetBorderColor(tcell.ColorYellow).
+		SetTitleColor(tcell.ColorYellow).
+		SetTitle(" Search (ESC to cancel, Enter to confirm) ").
+		SetTitleAlign(tview.AlignLeft)
+
+	a.searchInput.SetChangedFunc(func(text string) {
+		a.state.searchQuery = text
+		if text == "" {
+			a.state.filteredItems = a.state.items
+		} else {
+			a.state.filteredItems = search.Filter(a.state.items, text)
+		}
+		a.state.cursor = 0
+		a.updateListDisplay()
+	})
+
+	a.searchInput.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+		if event.Key() == tcell.KeyEscape {
+			a.state.filteredItems = a.state.items
+			a.state.searchQuery = ""
+			a.state.cursor = 0
+			a.exitSearchMode()
+			a.updateListDisplay()
+			return nil
+		}
+		if event.Key() == tcell.KeyEnter {
+			a.exitSearchMode()
+			return nil
+		}
+		return event
+	})
+
+	a.mainFlex = tview.NewFlex().
+		SetDirection(tview.FlexRow).
+		AddItem(a.listContainer, 0, 1, true).
+		AddItem(a.listHelp, 3, 0, false)
+
+	outer := tview.NewFlex().
+		SetDirection(tview.FlexRow).
+		AddItem(nil, 1, 0, false).
+		AddItem(tview.NewFlex().
+			AddItem(nil, 2, 0, false).
+			AddItem(a.mainFlex, 0, 1, true).
+			AddItem(nil, 2, 0, false),
+			0, 1, true).
+		AddItem(nil, 1, 0, false)
+
+	return outer
+}
+
+// buildPreviewPage creates the preview mode layout
+func (a *App) buildPreviewPage() tview.Primitive {
+	a.previewHeader = tview.NewTextView()
+
+	a.previewView = tview.NewTextView().
+		SetDynamicColors(true).
+		SetScrollable(true).
+		SetWordWrap(true).
+		SetTextColor(tcell.ColorDefault)
+	a.previewView.SetBorder(true).
+		SetBorderColor(tcell.ColorGreen).
+		SetTitleColor(tcell.ColorGreen).
+		SetBorderPadding(1, 0, 1, 1).
+		SetTitle(" Preview ").
+		SetTitleAlign(tview.AlignLeft)
+
+	a.previewView.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+		if event.Key() == tcell.KeyEscape || event.Rune() == 'q' {
+			a.switchToListMode()
+			return nil
+		}
+		if event.Key() == tcell.KeyEnter || event.Rune() == 'y' {
+			a.handleCopyAction()
+			return nil
+		}
+		return event
+	})
+
+	a.previewHelp = tview.NewTextView().
+		SetDynamicColors(true).
+		SetTextAlign(tview.AlignLeft)
+	a.previewHelp.SetText("  enter/y copy • esc/q back • ↑↓ scroll")
+	a.previewHelp.SetBorder(true).
+		SetTitle(" Shortcuts ").
+		SetTitleAlign(tview.AlignLeft).
+		SetBorderColor(tcell.ColorBlue).
+		SetTitleColor(tcell.ColorBlue).
+		SetBorderPadding(0, 0, 1, 1)
+
+	flex := tview.NewFlex().
+		SetDirection(tview.FlexRow).
+		AddItem(a.previewView, 0, 1, true).
+		AddItem(a.previewHelp, 3, 0, false)
+
+	outer := tview.NewFlex().
+		SetDirection(tview.FlexRow).
+		AddItem(nil, 1, 0, false).
+		AddItem(tview.NewFlex().
+			AddItem(nil, 2, 0, false).
+			AddItem(flex, 0, 1, true).
+			AddItem(nil, 2, 0, false),
+			0, 1, true).
+		AddItem(nil, 1, 0, false)
+
+	return outer
+}
