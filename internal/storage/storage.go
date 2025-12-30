@@ -20,7 +20,6 @@ func New(dbPath string) (*Storage, error) {
 		return nil, err
 	}
 
-	// Create table if not exists
 	_, err = db.Exec(`
 		CREATE TABLE IF NOT EXISTS clipboard_history (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -40,10 +39,15 @@ func New(dbPath string) (*Storage, error) {
 
 // Add inserts a new clipboard item
 func (s *Storage) Add(content string) error {
+	latest, err := s.GetLatest()
+	if err == nil && latest != nil && latest.Content == content {
+		return nil
+	}
+
 	itemType := types.DetectType(content)
 	preview := types.TruncatePreview(content, 100)
 
-	_, err := s.db.Exec(
+	_, err = s.db.Exec(
 		"INSERT INTO clipboard_history (content, type, preview, timestamp) VALUES (?, ?, ?, ?)",
 		content, itemType, preview, time.Now(),
 	)
