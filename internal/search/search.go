@@ -1,29 +1,27 @@
 package search
 
 import (
-	"github.com/sahilm/fuzzy"
+	"strings"
 	"github.com/dvd/cliptui/pkg/types"
 )
 
-// Filter performs fuzzy search on clipboard items
+// Filter performs case-insensitive substring search on clipboard items
 func Filter(items []types.ClipboardItem, query string) []types.ClipboardItem {
 	if query == "" {
 		return items
 	}
 
-	// Build searchable strings
-	searchStrings := make([]string, len(items))
-	for i, item := range items {
-		searchStrings[i] = item.Content
+	if len(items) == 0 {
+		return items
 	}
 
-	// Perform fuzzy search
-	matches := fuzzy.Find(query, searchStrings)
+	query = strings.ToLower(query)
+	results := make([]types.ClipboardItem, 0)
 
-	// Build result list maintaining order of matches
-	results := make([]types.ClipboardItem, len(matches))
-	for i, match := range matches {
-		results[i] = items[match.Index]
+	for _, item := range items {
+		if strings.Contains(strings.ToLower(item.Content), query) {
+			results = append(results, item)
+		}
 	}
 
 	return results
