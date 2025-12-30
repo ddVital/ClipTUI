@@ -74,12 +74,18 @@ func main() {
 	}
 }
 
-func runDaemon() {
+// openStorage opens the storage database and handles errors
+func openStorage() *storage.Storage {
 	store, err := storage.New(cfg.DBPath)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Failed to open database: %v\n", err)
 		os.Exit(1)
 	}
+	return store
+}
+
+func runDaemon() {
+	store := openStorage()
 	defer store.Close()
 
 	monitor := clipboard.NewMonitor(store, time.Duration(cfg.PollInterval)*time.Millisecond)
@@ -109,11 +115,7 @@ func runDaemon() {
 }
 
 func showTUI() {
-	store, err := storage.New(cfg.DBPath)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Failed to open database: %v\n", err)
-		os.Exit(1)
-	}
+	store := openStorage()
 	defer store.Close()
 
 	app, err := tui.New(store)
@@ -129,11 +131,7 @@ func showTUI() {
 }
 
 func clearHistory() {
-	store, err := storage.New(cfg.DBPath)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Failed to open database: %v\n", err)
-		os.Exit(1)
-	}
+	store := openStorage()
 	defer store.Close()
 
 	if err := store.Clear(); err != nil {
