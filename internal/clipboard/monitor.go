@@ -36,14 +36,17 @@ func (m *Monitor) Start(ctx context.Context) error {
 		case <-ticker.C:
 			content, err := clipboard.ReadAll()
 			if err != nil {
-				// Clipboard read error, continue
 				continue
 			}
 
-			// Only store if content changed and is not empty
 			if content != "" && content != m.lastContent {
+				latest, err := m.storage.GetLatest()
+				if err == nil && latest != nil && latest.Content == content {
+					m.lastContent = content
+					continue
+				}
+
 				if err := m.storage.Add(content); err != nil {
-					// Log error but continue monitoring
 					continue
 				}
 				m.lastContent = content
