@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"github.com/dvd/cliptui/internal/clipboard"
 	"github.com/dvd/cliptui/internal/search"
 	"github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
@@ -23,7 +24,7 @@ func (a *App) buildListPage() tview.Primitive {
 		if action == tview.MouseScrollUp {
 			row, _ := a.listWidget.GetSelection()
 			if row > 1 {
-				a.listWidget.Select(row-1, 0)
+				a.listWidget.Select(row-1, 1)
 				a.state.cursor = row - 2 // New row is row-1, cursor is (row-1)-1 = row-2
 				a.updateListDisplay()
 			}
@@ -32,7 +33,7 @@ func (a *App) buildListPage() tview.Primitive {
 		if action == tview.MouseScrollDown {
 			row, _ := a.listWidget.GetSelection()
 			if row < a.listWidget.GetRowCount()-1 {
-				a.listWidget.Select(row+1, 0)
+				a.listWidget.Select(row+1, 1)
 				a.state.cursor = row // New row is row+1, cursor is (row+1)-1 = row
 				a.updateListDisplay()
 			}
@@ -46,7 +47,7 @@ func (a *App) buildListPage() tview.Primitive {
 		case 'j':
 			row, _ := a.listWidget.GetSelection()
 			if row < a.listWidget.GetRowCount()-1 {
-				a.listWidget.Select(row+1, 0)
+				a.listWidget.Select(row+1, 1)
 				a.state.cursor = row // New row is row+1, cursor is (row+1)-1 = row
 				a.updateListDisplay()
 			}
@@ -54,7 +55,7 @@ func (a *App) buildListPage() tview.Primitive {
 		case 'k':
 			row, _ := a.listWidget.GetSelection()
 			if row > 1 { // Can't go above row 1 (row 0 is header)
-				a.listWidget.Select(row-1, 0)
+				a.listWidget.Select(row-1, 1)
 				a.state.cursor = row - 2 // New row is row-1, cursor is (row-1)-1 = row-2
 				a.updateListDisplay()
 			}
@@ -74,6 +75,15 @@ func (a *App) buildListPage() tview.Primitive {
 		case 'y':
 			a.handleCopyAction()
 			return nil
+		case '0', '1', '2', '3', '4', '5', '6', '7', '8', '9':
+			// Quick copy by number (0 = first item, 9 = tenth item)
+			num := int(event.Rune() - '0')
+			if num < len(a.state.filteredItems) {
+				item := a.state.filteredItems[num]
+				clipboard.SetClipboard(item.Content)
+				a.app.Stop()
+			}
+			return nil
 		}
 
 		if event.Key() == tcell.KeyEnter {
@@ -84,7 +94,7 @@ func (a *App) buildListPage() tview.Primitive {
 		if event.Key() == tcell.KeyDown {
 			row, _ := a.listWidget.GetSelection()
 			if row < a.listWidget.GetRowCount()-1 {
-				a.listWidget.Select(row+1, 0)
+				a.listWidget.Select(row+1, 1)
 				a.state.cursor = row // New row is row+1, cursor is (row+1)-1 = row
 				a.updateListDisplay()
 			}
@@ -93,7 +103,7 @@ func (a *App) buildListPage() tview.Primitive {
 		if event.Key() == tcell.KeyUp {
 			row, _ := a.listWidget.GetSelection()
 			if row > 1 {
-				a.listWidget.Select(row-1, 0)
+				a.listWidget.Select(row-1, 1)
 				a.state.cursor = row - 2 // New row is row-1, cursor is (row-1)-1 = row-2
 				a.updateListDisplay()
 			}
@@ -106,25 +116,20 @@ func (a *App) buildListPage() tview.Primitive {
 	a.listHelp = tview.NewTextView().
 		SetDynamicColors(true).
 		SetTextAlign(tview.AlignLeft)
-	a.listHelp.SetText("  ↑/k up • ↓/j down • enter/y copy • p preview • / search • d delete • D clear • q quit")
+	a.listHelp.SetText("  0-9 quick copy • ↑/k up • ↓/j down • enter/y copy • p preview • / search • d delete • D clear • q quit")
 	a.listHelp.SetBorder(true).
 		SetTitle(" Shortcuts ").
 		SetTitleAlign(tview.AlignLeft).
 		SetBorderColor(tcell.ColorBlue).
 		SetTitleColor(tcell.ColorBlue)
 
-	centeredTable := tview.NewFlex().
-		AddItem(nil, 0, 1, false).
-		AddItem(a.listWidget, 100, 0, true).
-		AddItem(nil, 0, 1, false)
-
 	a.listContainer = tview.NewFlex().
 		SetDirection(tview.FlexRow).
-		AddItem(centeredTable, 0, 1, true)
+		AddItem(a.listWidget, 0, 1, true)
 	a.listContainer.SetBorder(true).
 		SetBorderColor(tcell.ColorGreen).
 		SetTitleColor(tcell.ColorGreen).
-		SetBorderPadding(1, 0, 1, 1).
+		SetBorderPadding(0, 0, 1, 1).
 		SetTitle(" Clipboard History ").
 		SetTitleAlign(tview.AlignLeft)
 
@@ -141,7 +146,8 @@ func (a *App) buildListPage() tview.Primitive {
 		SetBorderColor(tcell.ColorYellow).
 		SetTitleColor(tcell.ColorYellow).
 		SetTitle(" Search (ESC to cancel, Enter to confirm) ").
-		SetTitleAlign(tview.AlignLeft)
+		SetTitleAlign(tview.AlignLeft).
+		SetBorderPadding(0, 0, 1, 1)
 
 	a.searchInput.SetChangedFunc(func(text string) {
 		a.state.searchQuery = text
