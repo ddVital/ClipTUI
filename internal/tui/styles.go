@@ -48,15 +48,3 @@ func truncate(s string, maxLen int) string {
 	return s[:maxLen-3] + "..."
 }
 
-// styleTimestamp returns a styled timestamp string
-func styleTimestamp(t time.Time) string {
-	return formatTimestamp(t)
-}
-
-// min returns the minimum of two integers
-func min(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
-}
