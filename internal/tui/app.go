@@ -1,7 +1,9 @@
 package tui
 
 import (
+	"context"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/dvd/cliptui/internal/clipboard"
@@ -12,8 +14,22 @@ import (
 	"github.com/rivo/tview"
 )
 
+const (
+	// maxItemsToFetch is the maximum number of clipboard items to fetch from storage
+	maxItemsToFetch = 100
+	// clipboardPollInterval is how often to check for clipboard changes
+	clipboardPollInterval = 500 * time.Millisecond
+	// previewTruncateLength is the maximum length for list preview text
+	previewTruncateLength = 80
+	// previewFormatMaxLength is the maximum length for formatted preview content
+	previewFormatMaxLength = 1000
+	// searchInputHeight is the height of the search input widget
+	searchInputHeight = 3
+)
+
 // AppState holds the application state
 type AppState struct {
+	mu            sync.RWMutex
 	storage       *storage.Storage
 	items         []types.ClipboardItem
 	filteredItems []types.ClipboardItem
@@ -42,7 +58,7 @@ type App struct {
 
 // New creates a new TUI application
 func New(store *storage.Storage) (*App, error) {
-	items, err := store.GetRecent(100)
+	items, err := store.GetRecent(maxItemsToFetch)
 	if err != nil {
 		return nil, err
 	}
@@ -88,32 +104,38 @@ func New(store *storage.Storage) (*App, error) {
 
 // Run starts the tview application
 func (a *App) Run() error {
-	stopChan := make(chan bool)
-	go a.monitorClipboard(stopChan)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	go a.monitorClipboard(ctx)
 
 	err := a.app.Run()
 
-	stopChan <- true
+	cancel()
 
 	return err
 }
 
 // monitorClipboard checks for new clipboard items periodically
-func (a *App) monitorClipboard(stopChan chan bool) {
-	ticker := time.NewTicker(500 * time.Millisecond)
+func (a *App) monitorClipboard(ctx context.Context) {
+	ticker := time.NewTicker(clipboardPollInterval)
 	defer ticker.Stop()
 
 	for {
 		select {
-		case <-stopChan:
+		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			items, err := a.state.storage.GetRecent(100)
+			items, err := a.state.storage.GetRecent(maxItemsToFetch)
 			if err != nil {
 				continue
 			}
 
-			if len(items) != len(a.state.items) || (len(items) > 0 && len(a.state.items) > 0 && items[0].ID != a.state.items[0].ID) {
+			a.state.mu.Lock()
+			needsUpdate := len(items) != len(a.state.items) ||
+				(len(items) > 0 && len(a.state.items) > 0 && items[0].ID != a.state.items[0].ID)
+
+			if needsUpdate {
 				a.state.items = items
 
 				// Update filtered items if not searching
@@ -129,7 +151,10 @@ func (a *App) monitorClipboard(stopChan chan bool) {
 				if a.state.cursor < 0 {
 					a.state.cursor = 0
 				}
+			}
+			a.state.mu.Unlock()
 
+			if needsUpdate {
 				a.app.QueueUpdateDraw(func() {
 					a.updateListDisplay()
 				})
@@ -159,7 +184,10 @@ func (a *App) setupGlobalKeys() {
 
 // switchToListMode switches to list mode
 func (a *App) switchToListMode() {
+	a.state.mu.Lock()
 	a.state.currentMode = modeList
+	a.state.mu.Unlock()
+
 	a.pages.SwitchToPage("list")
 	a.app.SetFocus(a.listWidget)
 	a.updateListDisplay()
@@ -167,11 +195,18 @@ func (a *App) switchToListMode() {
 
 // switchToPreviewMode switches to preview mode
 func (a *App) switchToPreviewMode() {
-	if len(a.state.filteredItems) == 0 {
+	a.state.mu.RLock()
+	hasItems := len(a.state.filteredItems) > 0
+	a.state.mu.RUnlock()
+
+	if !hasItems {
 		return
 	}
 
+	a.state.mu.Lock()
 	a.state.currentMode = modePreview
+	a.state.mu.Unlock()
+
 	a.updatePreviewContent()
 	a.pages.SwitchToPage("preview")
 	a.app.SetFocus(a.previewView)
@@ -179,69 +214,82 @@ func (a *App) switchToPreviewMode() {
 
 // switchToSearchMode switches to search mode (shows search box at bottom)
 func (a *App) switchToSearchMode() {
+	a.state.mu.Lock()
 	a.state.currentMode = modeSearch
-	a.searchInput.SetText("")
 	a.state.searchQuery = ""
+	a.state.mu.Unlock()
+
+	a.searchInput.SetText("")
 
 	// Replace help with search input
 	a.mainFlex.RemoveItem(a.listHelp)
-	a.mainFlex.AddItem(a.searchInput, 3, 0, true)
+	a.mainFlex.AddItem(a.searchInput, searchInputHeight, 0, true)
 
 	a.app.SetFocus(a.searchInput)
 }
 
 // exitSearchMode exits search mode and returns to list
 func (a *App) exitSearchMode() {
+	a.state.mu.Lock()
 	a.state.currentMode = modeList
+	a.state.mu.Unlock()
 
 	// Replace search input with help
 	a.mainFlex.RemoveItem(a.searchInput)
-	a.mainFlex.AddItem(a.listHelp, 3, 0, false)
+	a.mainFlex.AddItem(a.listHelp, searchInputHeight, 0, false)
 
 	a.app.SetFocus(a.listWidget)
 }
 
 // handleCopyAction copies the selected item and quits
 func (a *App) handleCopyAction() {
+	a.state.mu.RLock()
 	if len(a.state.filteredItems) == 0 {
+		a.state.mu.RUnlock()
 		return
 	}
-
 	item := a.state.filteredItems[a.state.cursor]
+	a.state.mu.RUnlock()
+
 	clipboard.SetClipboard(item.Content)
 	a.app.Stop()
 }
 
 // handleDeleteAction deletes the selected item
 func (a *App) handleDeleteAction() {
+	a.state.mu.RLock()
 	if len(a.state.filteredItems) == 0 {
+		a.state.mu.RUnlock()
 		return
 	}
+	itemID := a.state.filteredItems[a.state.cursor].ID
+	a.state.mu.RUnlock()
 
-	item := a.state.filteredItems[a.state.cursor]
-	a.state.storage.Delete(item.ID)
-
+	a.state.storage.Delete(itemID)
 	a.reloadItems()
-
-	if a.state.cursor >= len(a.state.filteredItems) && a.state.cursor > 0 {
-		a.state.cursor--
-	}
-
 	a.updateListDisplay()
 }
 
 // handleClearAllAction clears all clipboard history
 func (a *App) handleClearAllAction() {
 	a.state.storage.Clear()
+
+	a.state.mu.Lock()
 	a.state.items = []types.ClipboardItem{}
 	a.state.filteredItems = []types.ClipboardItem{}
 	a.state.cursor = 0
+	a.state.mu.Unlock()
+
 	a.updateListDisplay()
 }
 
 // reloadItems reloads items from storage
 func (a *App) reloadItems() {
-	items, _ := a.state.storage.GetRecent(100)
+	items, _ := a.state.storage.GetRecent(maxItemsToFetch)
+
+	a.state.mu.Lock()
+	defer a.state.mu.Unlock()
+
 	a.state.items = items
 
 	if a.state.searchQuery != "" {
@@ -262,18 +310,25 @@ func (a *App) reloadItems() {
 func (a *App) updateListDisplay() {
 	a.listWidget.Clear()
 
-	if len(a.state.filteredItems) > 0 {
+	a.state.mu.RLock()
+	filteredItems := a.state.filteredItems
+	cursor := a.state.cursor
+	searchQuery := a.state.searchQuery
+	currentMode := a.state.currentMode
+	a.state.mu.RUnlock()
+
+	if len(filteredItems) > 0 {
 		title := fmt.Sprintf(" Clipboard History (%d/%d) ",
-			a.state.cursor+1, len(a.state.filteredItems))
+			cursor+1, len(filteredItems))
 		a.listContainer.SetTitle(title)
 	} else {
 		a.listContainer.SetTitle(" Clipboard History (0) ")
 	}
 
-	if len(a.state.filteredItems) == 0 {
+	if len(filteredItems) == 0 {
 		var message string
-		if a.state.searchQuery != "" {
-			message = "No results found for '" + a.state.searchQuery + "'"
+		if searchQuery != "" {
+			message = "No results found for '" + searchQuery + "'"
 		} else {
 			message = "No items in clipboard history"
 		}
@@ -316,9 +371,9 @@ func (a *App) updateListDisplay() {
 		SetExpansion(2).
 		SetSelectable(false))
 
-	for i, item := range a.state.filteredItems {
+	for i, item := range filteredItems {
 		row := i + 1 // +1 because row 0 is the header
-		preview := truncate(item.Preview, 80)
+		preview := truncate(item.Preview, previewTruncateLength)
 		timestamp := formatTimestamp(item.Timestamp)
 
 		// Left spacer
@@ -356,26 +411,28 @@ func (a *App) updateListDisplay() {
 			SetExpansion(2))
 	}
 
-	if len(a.state.filteredItems) > 0 && a.state.currentMode != modeSearch {
-		a.listWidget.Select(a.state.cursor+1, 1) // +1 for header row, column 1 is number column
+	if len(filteredItems) > 0 && currentMode != modeSearch {
+		a.listWidget.Select(cursor+1, 1) // +1 for header row, column 1 is number column
 	}
 }
 
 // updatePreviewContent updates the preview view with current item
 func (a *App) updatePreviewContent() {
+	a.state.mu.RLock()
 	if len(a.state.filteredItems) == 0 || a.state.cursor >= len(a.state.filteredItems) {
+		a.state.mu.RUnlock()
 		a.previewView.SetText("No item selected")
 		return
 	}
-
 	item := a.state.filteredItems[a.state.cursor]
+	a.state.mu.RUnlock()
 
 	timestamp := formatTimestamp(item.Timestamp)
 	title := fmt.Sprintf(" Preview - %s • %d bytes • %s ",
 		item.Type, len(item.Content), timestamp)
 	a.previewView.SetTitle(title)
 
-	content := FormatPreview(item.Content, item.Type, 1000)
+	content := FormatPreview(item.Content, item.Type, previewFormatMaxLength)
 	a.previewView.SetText(content)
 	a.previewView.ScrollToBeginning()
 }
