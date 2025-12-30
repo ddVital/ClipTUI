@@ -16,13 +16,11 @@ func HighlightContent(content string, itemType string) string {
 		return content
 	}
 
-	// Try to detect lexer from content
 	lexer := lexers.Analyse(content)
 	if lexer == nil {
 		lexer = lexers.Fallback
 	}
 
-	// Use a dark theme
 	style := styles.Get("monokai")
 	if style == nil {
 		style = styles.Fallback
@@ -51,13 +49,11 @@ func HighlightContent(content string, itemType string) string {
 func FormatPreview(content string, itemType string, maxLines int) string {
 	lines := strings.Split(content, "\n")
 
-	// Limit lines if needed
 	if len(lines) > maxLines {
 		lines = lines[:maxLines]
 		lines = append(lines, "...")
 	}
 
-	// For code, attempt highlighting
 	if itemType == types.TypeCode {
 		highlighted := HighlightContent(strings.Join(lines, "\n"), itemType)
 		return highlighted
