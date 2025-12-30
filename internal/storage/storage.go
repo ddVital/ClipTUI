@@ -2,6 +2,7 @@ package storage
 
 import (
 	"database/sql"
+	"os"
 	"time"
 
 	_ "github.com/mattn/go-sqlite3"
@@ -32,6 +33,12 @@ func New(dbPath string) (*Storage, error) {
 	`)
 	if err != nil {
 		return nil, err
+	}
+
+	// Set secure file permissions (0600 = read/write for owner only)
+	if err := os.Chmod(dbPath, 0600); err != nil {
+		// Don't fail if we can't set permissions, just continue
+		// This allows the app to work on systems where chmod might not work
 	}
 
 	return &Storage{db: db}, nil
