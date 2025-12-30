@@ -8,7 +8,6 @@ import (
 	"syscall"
 	"time"
 
-	tea "github.com/charmbracelet/bubbletea"
 	"github.com/spf13/cobra"
 
 	"github.com/dvd/cliptui/internal/clipboard"
@@ -26,7 +25,6 @@ var rootCmd = &cobra.Command{
 It watches your system clipboard in the background, stores every item locally,
 and lets you browse, search, preview, and restore previous clipboard entries.`,
 	Run: func(cmd *cobra.Command, args []string) {
-		// Default action: show TUI
 		showTUI()
 	},
 }
@@ -118,14 +116,13 @@ func showTUI() {
 	}
 	defer store.Close()
 
-	model, err := tui.New(store)
+	app, err := tui.New(store)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Failed to create TUI: %v\n", err)
 		os.Exit(1)
 	}
 
-	p := tea.NewProgram(model, tea.WithAltScreen())
-	if _, err := p.Run(); err != nil {
+	if err := app.Run(); err != nil {
 		fmt.Fprintf(os.Stderr, "TUI error: %v\n", err)
 		os.Exit(1)
 	}
