@@ -25,7 +25,6 @@ func DetectType(content string) string {
 		return TypeText
 	}
 
-	// Simple heuristics
 	if isURL(content) {
 		return TypeURL
 	}
@@ -43,7 +42,6 @@ func isURL(s string) bool {
 }
 
 func isCode(s string) bool {
-	// Check for common code patterns
 	codeIndicators := []string{"{", "}", "func ", "def ", "class ", "import ", "package ", "const ", "var ", "let "}
 	for _, indicator := range codeIndicators {
 		if contains(s, indicator) {
@@ -54,7 +52,6 @@ func isCode(s string) bool {
 }
 
 func isMarkdown(s string) bool {
-	// Check for markdown patterns
 	mdIndicators := []string{"# ", "## ", "- ", "* ", "```", "**", "__"}
 	for _, indicator := range mdIndicators {
 		if contains(s, indicator) {
