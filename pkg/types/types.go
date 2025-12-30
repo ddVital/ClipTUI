@@ -1,6 +1,13 @@
 package types
 
-import "time"
+import (
+	"strings"
+	"time"
+)
+
+const (
+	maxURLLength = 2048
+)
 
 // ClipboardItem represents a single clipboard entry
 type ClipboardItem struct {
@@ -38,7 +45,10 @@ func DetectType(content string) string {
 }
 
 func isURL(s string) bool {
-	return len(s) < 2048 && (len(s) > 7 && (s[:7] == "http://" || s[:8] == "https://"))
+	if len(s) >= maxURLLength {
+		return false
+	}
+	return strings.HasPrefix(s, "http://") || strings.HasPrefix(s, "https://")
 }
 
 func isCode(s string) bool {
