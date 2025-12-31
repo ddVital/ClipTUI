@@ -1,6 +1,6 @@
 # Maintainer: ddvital <ddvital@gmail.com>
 pkgname=cliptui
-pkgver=1.0.0
+pkgver=1.0.1
 pkgrel=1
 pkgdesc="A beautiful terminal-based clipboard history manager"
 arch=('x86_64')
